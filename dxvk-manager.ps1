@@ -4,6 +4,7 @@ Add-Type -AssemblyName System.Drawing
 
 # Global log textbox (will be created later)
 $global:logTextBox = $null
+$global:forcedDXVersion = $null
 
 function Write-Log {
     param([string]$message)
@@ -60,7 +61,10 @@ function Install-DXVK {
     $bytes = [System.IO.File]::ReadAllBytes($exePath)
     $content = [System.Text.Encoding]::ASCII.GetString($bytes)
 
-    if ($content -match "d3d11\.dll") {
+    if ($global:forcedDXVersion -ne $null) {
+        $dxVersion = $global:forcedDXVersion
+        Write-Log "Using forced DirectX version: $dxVersion"
+    } elseif ($content -match "d3d11\.dll") {
         $dxVersion = 11
     } elseif ($content -match "d3d10\.dll") {
         $dxVersion = 10
@@ -193,6 +197,27 @@ $btnScan.Size = New-Object System.Drawing.Size(140,20)
 $btnScan.Text = "Scan Library"
 $form.Controls.Add($btnScan)
 
+$lblForceDX = New-Object System.Windows.Forms.Label
+$lblForceDX.Location = New-Object System.Drawing.Point(10,40)
+$lblForceDX.Size = New-Object System.Drawing.Size(100,20)
+$lblForceDX.Text = "Force DX Version:"
+$form.Controls.Add($lblForceDX)
+
+$comboForceDX = New-Object System.Windows.Forms.ComboBox
+$comboForceDX.Location = New-Object System.Drawing.Point(120,40)
+$comboForceDX.Size = New-Object System.Drawing.Size(100,20)
+$comboForceDX.Items.AddRange(@("None","8","9","10","11"))
+$comboForceDX.SelectedIndex = 0
+$form.Controls.Add($comboForceDX)
+
+$comboForceDX.Add_SelectedIndexChanged({
+    if ($comboForceDX.SelectedItem -eq "None") {
+        $global:forcedDXVersion = $null
+    } else {
+        $global:forcedDXVersion = [int]$comboForceDX.SelectedItem
+    }
+})
+
 $btnRemove = New-Object System.Windows.Forms.Button
 $btnRemove.Location = New-Object System.Drawing.Point(160,350)
 $btnRemove.Size = New-Object System.Drawing.Size(140,30)
@@ -212,8 +237,8 @@ $btnDeveloper.Text = "Developer Info"
 $form.Controls.Add($btnDeveloper)
 
 $listView = New-Object System.Windows.Forms.ListView
-$listView.Location = New-Object System.Drawing.Point(10,40)
-$listView.Size = New-Object System.Drawing.Size(760,300)
+$listView.Location = New-Object System.Drawing.Point(10,70)
+$listView.Size = New-Object System.Drawing.Size(760,270)
 $listView.View = "Details"
 $listView.CheckBoxes = $true
 $listView.FullRowSelect = $true
