@@ -173,6 +173,27 @@ function Download-Dxvk {
     Remove-Item -Path $downloadPath -Force
 }
 
+function Get-SteamLibraryPaths {
+    $libraries = @()
+    $defaultVdfPath = "C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf"
+    if (Test-Path $defaultVdfPath) {
+        $content = Get-Content $defaultVdfPath -Raw
+        $matches = [regex]::Matches($content, '"path"\s*"([^"]+)"')
+        foreach ($match in $matches) {
+            $path = $match.Groups[1].Value
+            $path = $path -replace '/', '\'
+            if (Test-Path $path) {
+                $libraries += "$path\steamapps\common"
+            }
+        }
+    }
+    if ($libraries.Count -eq 0) {
+        $libraries = @("C:\Program Files (x86)\Steam\steamapps\common")
+    }
+    $libraries = $libraries | Select-Object -Unique
+    return $libraries
+}
+
 # GUI
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "DXVK Manager"
@@ -182,14 +203,30 @@ $form.StartPosition = "CenterScreen"
 $lblLibrary = New-Object System.Windows.Forms.Label
 $lblLibrary.Location = New-Object System.Drawing.Point(10,10)
 $lblLibrary.Size = New-Object System.Drawing.Size(100,20)
-$lblLibrary.Text = "Steam Library:"
+$lblLibrary.Text = "Steam Libraries:"
 $form.Controls.Add($lblLibrary)
 
-$txtLibrary = New-Object System.Windows.Forms.TextBox
-$txtLibrary.Location = New-Object System.Drawing.Point(120,10)
-$txtLibrary.Size = New-Object System.Drawing.Size(500,20)
-$txtLibrary.Text = "C:\Program Files (x86)\Steam\steamapps\common"
-$form.Controls.Add($txtLibrary)
+$libraryListView = New-Object System.Windows.Forms.ListView
+$libraryListView.Location = New-Object System.Drawing.Point(120,10)
+$libraryListView.Size = New-Object System.Drawing.Size(500,60)
+$libraryListView.View = "List"
+$libraryListView.CheckBoxes = $true
+$form.Controls.Add($libraryListView)
+
+$detectedLibraries = Get-SteamLibraryPaths
+Write-Log "Detected libraries: $($detectedLibraries -join '; ')"
+if ($detectedLibraries.Count -gt 0) {
+    foreach ($lib in $detectedLibraries) {
+        $lib = $lib -replace '\\\\', '\'
+        $item = New-Object System.Windows.Forms.ListViewItem($lib)
+        $item.Checked = $true
+        $libraryListView.Items.Add($item)
+    }
+} else {
+    $item = New-Object System.Windows.Forms.ListViewItem("C:\Program Files (x86)\Steam\steamapps\common")
+    $item.Checked = $true
+    $libraryListView.Items.Add($item)
+}
 
 $btnScan = New-Object System.Windows.Forms.Button
 $btnScan.Location = New-Object System.Drawing.Point(630,10)
@@ -198,13 +235,13 @@ $btnScan.Text = "Scan Library"
 $form.Controls.Add($btnScan)
 
 $lblForceDX = New-Object System.Windows.Forms.Label
-$lblForceDX.Location = New-Object System.Drawing.Point(10,40)
+$lblForceDX.Location = New-Object System.Drawing.Point(10,80)
 $lblForceDX.Size = New-Object System.Drawing.Size(100,20)
 $lblForceDX.Text = "Force DX Version:"
 $form.Controls.Add($lblForceDX)
 
 $comboForceDX = New-Object System.Windows.Forms.ComboBox
-$comboForceDX.Location = New-Object System.Drawing.Point(120,40)
+$comboForceDX.Location = New-Object System.Drawing.Point(120,80)
 $comboForceDX.Size = New-Object System.Drawing.Size(100,20)
 $comboForceDX.Items.AddRange(@("None","8","9","10","11"))
 $comboForceDX.SelectedIndex = 0
@@ -237,8 +274,8 @@ $btnDeveloper.Text = "Developer Info"
 $form.Controls.Add($btnDeveloper)
 
 $listView = New-Object System.Windows.Forms.ListView
-$listView.Location = New-Object System.Drawing.Point(10,70)
-$listView.Size = New-Object System.Drawing.Size(760,270)
+$listView.Location = New-Object System.Drawing.Point(10,110)
+$listView.Size = New-Object System.Drawing.Size(760,230)
 $listView.View = "Details"
 $listView.CheckBoxes = $true
 $listView.FullRowSelect = $true
@@ -265,19 +302,26 @@ $global:logTextBox = $logTextBox
 # Events
 $btnScan.Add_Click({
     $listView.Items.Clear()
-    $libraryPath = $txtLibrary.Text
-    if (-not (Test-Path $libraryPath)) {
-        [System.Windows.Forms.MessageBox]::Show("Library path not found.")
+    $checkedLibraries = $libraryListView.CheckedItems
+    if ($checkedLibraries.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("Please select at least one library.")
         return
     }
-    Write-Log "Scanning library: $libraryPath"
-    $gameDirs = Get-ChildItem -Path $libraryPath -Directory | Where-Object {
-        (Get-ChildItem -Path $_.FullName -Recurse -Filter *.exe -ErrorAction SilentlyContinue).Count -gt 0
-    }
-    foreach ($dir in $gameDirs) {
-        $item = New-Object System.Windows.Forms.ListViewItem($dir.Name)
-        $item.SubItems.Add($dir.FullName)
-        $listView.Items.Add($item)
+    foreach ($item in $checkedLibraries) {
+        $libraryPath = $item.Text
+        if (-not (Test-Path $libraryPath)) {
+            Write-Log "Library path not found: $libraryPath"
+            continue
+        }
+        Write-Log "Scanning library: $libraryPath"
+        $gameDirs = Get-ChildItem -Path $libraryPath -Directory | Where-Object {
+            (Get-ChildItem -Path $_.FullName -Recurse -Filter *.exe -ErrorAction SilentlyContinue).Count -gt 0
+        }
+        foreach ($dir in $gameDirs) {
+            $listItem = New-Object System.Windows.Forms.ListViewItem($dir.Name)
+            $listItem.SubItems.Add($dir.FullName)
+            $listView.Items.Add($listItem)
+        }
     }
     Write-Log "Scan complete. Found $($listView.Items.Count) games."
 })
