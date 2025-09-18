@@ -173,7 +173,7 @@ function Download-Dxvk {
     Remove-Item -Path $downloadPath -Force
 }
 
-function Get-SteamLibraryPaths {
+function Get-GameLibraryPaths {
     $libraries = @()
     $defaultVdfPath = "C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf"
     if (Test-Path $defaultVdfPath) {
@@ -186,6 +186,11 @@ function Get-SteamLibraryPaths {
                 $libraries += "$path\steamapps\common"
             }
         }
+    }
+    # Add Epic Games library
+    $epicPath = "C:\Program Files\Epic Games"
+    if (Test-Path $epicPath) {
+        $libraries += $epicPath
     }
     if ($libraries.Count -eq 0) {
         $libraries = @("C:\Program Files (x86)\Steam\steamapps\common")
@@ -203,7 +208,7 @@ $form.StartPosition = "CenterScreen"
 $lblLibrary = New-Object System.Windows.Forms.Label
 $lblLibrary.Location = New-Object System.Drawing.Point(10,10)
 $lblLibrary.Size = New-Object System.Drawing.Size(100,20)
-$lblLibrary.Text = "Steam Libraries:"
+$lblLibrary.Text = "Game Libraries:"
 $form.Controls.Add($lblLibrary)
 
 $libraryListView = New-Object System.Windows.Forms.ListView
@@ -213,7 +218,7 @@ $libraryListView.View = "List"
 $libraryListView.CheckBoxes = $true
 $form.Controls.Add($libraryListView)
 
-$detectedLibraries = Get-SteamLibraryPaths
+$detectedLibraries = Get-GameLibraryPaths
 Write-Log "Detected libraries: $($detectedLibraries -join '; ')"
 if ($detectedLibraries.Count -gt 0) {
     foreach ($lib in $detectedLibraries) {
@@ -322,6 +327,12 @@ $btnScan.Add_Click({
             $listItem.SubItems.Add($dir.FullName)
             $listView.Items.Add($listItem)
         }
+    }
+    # Sort the list by game name
+    $sortedItems = $listView.Items | Sort-Object Text
+    $listView.Items.Clear()
+    foreach ($item in $sortedItems) {
+        $listView.Items.Add($item)
     }
     Write-Log "Scan complete. Found $($listView.Items.Count) games."
 })
